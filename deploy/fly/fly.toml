@@ -1,0 +1,32 @@
+app = "sync-storage"
+primary_region = "iad"
+kill_signal = "SIGINT"
+kill_timeout = 5
+
+[build]
+  dockerfile = "apps/api/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "4000"
+  AUTH_MODE = "jwt"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "10s"
+    timeout = "2s"
+    method = "GET"
+    path = "/v1/healthz"
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    method = "GET"
+    path = "/v1/readyz"
