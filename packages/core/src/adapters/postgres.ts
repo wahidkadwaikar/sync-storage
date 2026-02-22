@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, like, or } from 'drizzle-orm'
+import { and, asc, eq, gt, isNull, like, or, type SQL } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import { pgItems } from '@sync-storage/db'
@@ -177,13 +177,18 @@ export class PostgresStorageAdapter implements StorageAdapter {
     const limit = options.limit ?? 50
     const cursorKey = decodeCursor(options.cursor)
     const now = new Date()
+    const notExpiredClause = or(isNull(pgItems.expiresAt), gt(pgItems.expiresAt, now))
 
-    const clauses = [
+    if (!notExpiredClause) {
+      throw new Error('Failed to construct expiry clause')
+    }
+
+    const clauses: SQL<unknown>[] = [
       eq(pgItems.tenantId, scope.tenantId),
       eq(pgItems.namespace, scope.namespace),
       eq(pgItems.userId, scope.userId),
-      or(isNull(pgItems.expiresAt), gt(pgItems.expiresAt, now)),
-    ] as any[]
+      notExpiredClause,
+    ]
 
     if (options.prefix) {
       clauses.push(like(pgItems.key, `${options.prefix}%`))
@@ -228,15 +233,19 @@ export class PostgresStorageAdapter implements StorageAdapter {
     key: string,
     onlyActive: boolean
   ): Promise<PostgresRow | null> {
-    const clauses = [
+    const clauses: SQL<unknown>[] = [
       eq(pgItems.tenantId, scope.tenantId),
       eq(pgItems.namespace, scope.namespace),
       eq(pgItems.userId, scope.userId),
       eq(pgItems.key, key),
-    ] as any[]
+    ]
 
     if (onlyActive) {
-      clauses.push(or(isNull(pgItems.expiresAt), gt(pgItems.expiresAt, new Date())))
+      const notExpiredClause = or(isNull(pgItems.expiresAt), gt(pgItems.expiresAt, new Date()))
+      if (!notExpiredClause) {
+        throw new Error('Failed to construct expiry clause')
+      }
+      clauses.push(notExpiredClause)
     }
 
     const rows = await this.db

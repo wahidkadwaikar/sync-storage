@@ -1,5 +1,5 @@
 import { createClient } from '@libsql/client'
-import { and, asc, eq, gt, isNull, like, or } from 'drizzle-orm'
+import { and, asc, eq, gt, isNull, like, or, type SQL } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { sqliteItems } from '@sync-storage/db'
 import { PreconditionFailedError } from '../errors.js'
@@ -182,13 +182,21 @@ export class TursoStorageAdapter implements StorageAdapter {
     const limit = options.limit ?? 50
     const cursorKey = decodeCursor(options.cursor)
     const currentIso = nowIso(new Date())
+    const notExpiredClause = or(
+      isNull(sqliteItems.expiresAt),
+      gt(sqliteItems.expiresAt, currentIso)
+    )
 
-    const clauses = [
+    if (!notExpiredClause) {
+      throw new Error('Failed to construct expiry clause')
+    }
+
+    const clauses: SQL<unknown>[] = [
       eq(sqliteItems.tenantId, scope.tenantId),
       eq(sqliteItems.namespace, scope.namespace),
       eq(sqliteItems.userId, scope.userId),
-      or(isNull(sqliteItems.expiresAt), gt(sqliteItems.expiresAt, currentIso)),
-    ] as any[]
+      notExpiredClause,
+    ]
 
     if (options.prefix) {
       clauses.push(like(sqliteItems.key, `${options.prefix}%`))
@@ -233,16 +241,23 @@ export class TursoStorageAdapter implements StorageAdapter {
     key: string,
     onlyActive: boolean
   ): Promise<TursoRow | null> {
-    const clauses = [
+    const clauses: SQL<unknown>[] = [
       eq(sqliteItems.tenantId, scope.tenantId),
       eq(sqliteItems.namespace, scope.namespace),
       eq(sqliteItems.userId, scope.userId),
       eq(sqliteItems.key, key),
-    ] as any[]
+    ]
 
     if (onlyActive) {
       const currentIso = nowIso(new Date())
-      clauses.push(or(isNull(sqliteItems.expiresAt), gt(sqliteItems.expiresAt, currentIso)))
+      const notExpiredClause = or(
+        isNull(sqliteItems.expiresAt),
+        gt(sqliteItems.expiresAt, currentIso)
+      )
+      if (!notExpiredClause) {
+        throw new Error('Failed to construct expiry clause')
+      }
+      clauses.push(notExpiredClause)
     }
 
     const rows = await this.db

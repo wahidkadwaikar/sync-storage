@@ -1,4 +1,5 @@
 import {
+  type JsonValue,
   PreconditionFailedError,
   ValidationError,
   normalizeIfMatch,
@@ -19,8 +20,9 @@ export function registerItemRoutes(
     const ttlParam = c.req.query('ttlSeconds')
     const ttlSeconds = ttlParam !== undefined ? Number.parseInt(ttlParam, 10) : undefined
 
-    const value = await readJsonBody(c.req.raw)
-    const item = await runtime.service.setItem(actor, key, value as any, {
+    const rawValue = await readJsonBody(c.req.raw)
+    const value = toJsonValue(rawValue, 'request body')
+    const item = await runtime.service.setItem(actor, key, value, {
       ttlSeconds,
       ifMatch,
     })
@@ -58,7 +60,9 @@ export function registerItemRoutes(
       c.header('x-expires-at', item.expiresAt)
     }
 
-    return c.json(item.value as any)
+    return c.body(JSON.stringify(item.value), 200, {
+      'content-type': 'application/json',
+    })
   })
 
   app.delete('/v1/items/:key', async (c) => {
@@ -131,7 +135,7 @@ export function registerItemRoutes(
 
       return {
         key: entry.key,
-        value: entry.value as any,
+        value: toJsonValue(entry.value, `entries.${entry.key}.value`),
         ttlSeconds: entry.ttlSeconds,
         ifMatchVersion: parsedIfMatch,
       }
@@ -170,4 +174,32 @@ export function registerItemRoutes(
 
     return c.json(list)
   })
+}
+
+function toJsonValue(value: unknown, fieldName: string): JsonValue {
+  if (!isJsonValue(value)) {
+    throw new ValidationError(`${fieldName} must be a valid JSON value`)
+  }
+
+  return value
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) {
+    return true
+  }
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return true
+  }
+
+  if (Array.isArray(value)) {
+    return value.every((entry) => isJsonValue(entry))
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value).every((entry) => isJsonValue(entry))
+  }
+
+  return false
 }

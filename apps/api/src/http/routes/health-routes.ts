@@ -12,6 +12,6 @@ export function registerHealthRoutes(
   app.get('/v1/readyz', async (c) => {
     const health = await runtime.service.health()
     const status = health.ok ? 200 : 503
-    return c.json(health, status as any)
+    return c.json(health, status)
   })
 }
