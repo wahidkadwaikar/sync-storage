@@ -12,14 +12,11 @@ sync-storage provides a small remote storage API for non-sensitive app state so 
 
 ## Why teams pick this
 
-- Minimal JSON key-value API (`PUT/GET/DELETE`) with versioned routes (`/v1`)
+- Minimal JSON key-value API (`PUT/GET/DELETE`)
 - JWT-first production auth model (`AUTH_MODE=jwt`)
 - Optimistic concurrency with `ETag` + `If-Match`
 - Optional item TTL (`ttlSeconds`)
-- Batch read/write operations (`items:batchGet`, `items:batchPut`)
-- Prefix listing with cursor pagination (`GET /v1/items`)
 - Pluggable storage drivers: `SQLite`, `Turso`, `Postgres`, `Redis`
-- Fast deployment path: Fly template + Railway template + `pnpm deploy:fly`
 
 ## Quick start
 
@@ -32,22 +29,6 @@ pnpm dev
 API runs at `http://localhost:4000`.
 
 ## SDK example
-
-```ts
-import { SyncStorageClient } from '@sync-storage/sdk'
-
-const client = new SyncStorageClient({
-  baseUrl: 'http://localhost:4000',
-  namespace: 'default',
-  userId: 'my-user-id', // sent as x-user-id (mainly for AUTH_MODE=none)
-  getToken: async () => process.env.JWT,
-})
-
-await client.setItem('hasSeenWelcome', true)
-const seen = await client.getItem<boolean>('hasSeenWelcome')
-```
-
-## Feature flag example
 
 ```ts
 import { SyncStorageClient } from '@sync-storage/sdk'
@@ -88,17 +69,6 @@ curl -i -X GET \
   "http://localhost:4000/v1/items/my-key"
 ```
 
-## API surface
-
-- `GET /v1/healthz`
-- `GET /v1/readyz`
-- `PUT /v1/items/:key`
-- `GET /v1/items/:key`
-- `DELETE /v1/items/:key`
-- `POST /v1/items:batchGet`
-- `POST /v1/items:batchPut`
-- `GET /v1/items?prefix=&cursor=&limit=`
-
 ## Auth model
 
 - Production default: `AUTH_MODE=jwt`
@@ -117,7 +87,7 @@ curl -i -X GET \
 - `postgres`
 - `redis`
 
-Driver-specific env vars are documented in `/Users/wahid/Developer/sync-storage/deploy/README.md`.
+Driver-specific env vars are documented in `/sync-storage/deploy/README.md`.
 
 ## Deploy quickly
 
