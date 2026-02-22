@@ -35,13 +35,7 @@ export function handleApiError(error: unknown, c: Context): Response {
 }
 
 function toStatusCode(status: number): ContentfulStatusCode {
-  if (
-    status >= 200 &&
-    status <= 599 &&
-    status !== 204 &&
-    status !== 205 &&
-    status !== 304
-  ) {
+  if (status >= 200 && status <= 599 && status !== 204 && status !== 205 && status !== 304) {
     return status as ContentfulStatusCode
   }
   return 500
