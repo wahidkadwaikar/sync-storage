@@ -1,4 +1,3 @@
-import jwt from 'jsonwebtoken'
 import { describe, expect, it } from 'vitest'
 import {
   StorageService,
@@ -10,8 +9,6 @@ import {
 import { createApp } from '../src/app.js'
 import type { AppConfig } from '../src/config.js'
 
-const { sign } = jwt
-
 class MemoryAdapter implements StorageAdapter {
   private readonly data = new Map<string, StoredItem>()
 
@@ -19,7 +16,7 @@ class MemoryAdapter implements StorageAdapter {
     return this.data.get(this.id(scope, key)) ?? null
   }
 
-  async put(scope: StorageScope, key: string, value: any, options = {}): Promise<StoredItem> {
+  async put(scope: StorageScope, key: string, value: any, options: any = {}): Promise<StoredItem> {
     const current = await this.get(scope, key)
     const version = current ? current.version + 1 : 1
     const now = new Date().toISOString()
@@ -81,7 +78,6 @@ function createConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     nodeEnv: 'development',
     port: 4000,
-    authMode: 'none',
     defaultNamespace: 'default',
     defaultTenantId: 'default',
     maxBatchSize: 100,
@@ -98,40 +94,18 @@ function createConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 }
 
 describe('API app', () => {
-  it('requires x-user-id in AUTH_MODE=none', async () => {
+  it('supports static token auth', async () => {
     const adapter = new MemoryAdapter()
     const app = createApp({
-      config: createConfig(),
+      config: createConfig({ authToken: 'test-token' }),
       service: new StorageService(adapter),
     })
-
-    const response = await app.request('/v1/items/foo', {
-      method: 'PUT',
-      headers: {
-        'content-type': 'application/json',
-        'x-namespace': 'default',
-      },
-      body: JSON.stringify({ ok: true }),
-    })
-
-    expect(response.status).toBe(400)
-  })
-
-  it('supports jwt auth mode with sub claim', async () => {
-    const adapter = new MemoryAdapter()
-    const app = createApp({
-      config: createConfig({ authMode: 'jwt', jwtSecret: 'secret' }),
-      service: new StorageService(adapter),
-    })
-
-    const token = sign({ sub: 'user-1', tenant_id: 'tenant-a' }, 'secret')
 
     const put = await app.request('/v1/items/foo', {
       method: 'PUT',
       headers: {
-        authorization: `Bearer ${token}`,
+        authorization: 'Bearer test-token',
         'content-type': 'application/json',
-        'x-namespace': 'default',
       },
       body: JSON.stringify({ ok: true }),
     })
@@ -141,12 +115,80 @@ describe('API app', () => {
     const get = await app.request('/v1/items/foo', {
       method: 'GET',
       headers: {
-        authorization: `Bearer ${token}`,
-        'x-namespace': 'default',
+        authorization: 'Bearer test-token',
       },
     })
 
     expect(get.status).toBe(200)
     expect(await get.json()).toEqual({ ok: true })
+  })
+
+  it('rejects invalid token', async () => {
+    const adapter = new MemoryAdapter()
+    const app = createApp({
+      config: createConfig({ authToken: 'test-token' }),
+      service: new StorageService(adapter),
+    })
+
+    const response = await app.request('/v1/items/foo', {
+      method: 'GET',
+      headers: {
+        authorization: 'Bearer wrong-token',
+      },
+    })
+
+    expect(response.status).toBe(401)
+  })
+
+  it('works without auth if authToken is not configured', async () => {
+    const adapter = new MemoryAdapter()
+    const app = createApp({
+      config: createConfig({ authToken: undefined }),
+      service: new StorageService(adapter),
+    })
+
+    const response = await app.request('/v1/items/foo', {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ ok: true }),
+    })
+
+    expect(response.status).toBe(200)
+  })
+
+  it('uses x-user-id header to separate data', async () => {
+    const adapter = new MemoryAdapter()
+    const app = createApp({
+      config: createConfig(),
+      service: new StorageService(adapter),
+    })
+
+    // Put for user-1
+    await app.request('/v1/items/foo', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-user-id': 'user-1' },
+      body: JSON.stringify({ user: 1 }),
+    })
+
+    // Put for user-2
+    await app.request('/v1/items/foo', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-user-id': 'user-2' },
+      body: JSON.stringify({ user: 2 }),
+    })
+
+    // Get as user-1
+    const res1 = await app.request('/v1/items/foo', {
+      headers: { 'x-user-id': 'user-1' },
+    })
+    expect(await res1.json()).toEqual({ user: 1 })
+
+    // Get as user-2
+    const res2 = await app.request('/v1/items/foo', {
+      headers: { 'x-user-id': 'user-2' },
+    })
+    expect(await res2.json()).toEqual({ user: 2 })
   })
 })

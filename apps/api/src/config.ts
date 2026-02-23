@@ -4,9 +4,8 @@ import type { AdapterFactoryConfig, StorageDriver } from '@sync-storage/core'
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  AUTH_MODE: z.enum(['jwt', 'none']).optional(),
-  JWT_SECRET: z.string().optional(),
-  DEFAULT_NAMESPACE: z.string().optional(),
+  AUTH_TOKEN: z.string().optional(),
+  DEFAULT_NAMESPACE: z.string().default('default'),
   DEFAULT_TENANT_ID: z.string().default('default'),
   STORAGE_DRIVER: z.enum(['sqlite', 'turso', 'postgres', 'redis']).default('sqlite'),
   SQLITE_FILE_PATH: z.string().default('./data/sync-storage.sqlite'),
@@ -29,9 +28,8 @@ const envSchema = z.object({
 export interface AppConfig {
   nodeEnv: 'development' | 'test' | 'production'
   port: number
-  authMode: 'jwt' | 'none'
-  jwtSecret?: string
-  defaultNamespace?: string
+  authToken?: string
+  defaultNamespace: string
   defaultTenantId: string
   maxKeyLength: number
   maxValueBytes: number
@@ -43,19 +41,13 @@ export interface AppConfig {
 
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const parsed = envSchema.parse(env)
-  const authMode = parsed.AUTH_MODE ?? (parsed.NODE_ENV === 'production' ? 'jwt' : 'none')
-
-  if (authMode === 'jwt' && !parsed.JWT_SECRET) {
-    throw new Error('JWT_SECRET is required when AUTH_MODE is jwt')
-  }
 
   const adapterConfig = buildAdapterConfig(parsed.STORAGE_DRIVER, parsed)
 
   return {
     nodeEnv: parsed.NODE_ENV,
     port: parsed.PORT,
-    authMode,
-    jwtSecret: parsed.JWT_SECRET,
+    authToken: parsed.AUTH_TOKEN,
     defaultNamespace: parsed.DEFAULT_NAMESPACE,
     defaultTenantId: parsed.DEFAULT_TENANT_ID,
     maxKeyLength: parsed.MAX_KEY_LENGTH,
