@@ -2,6 +2,7 @@ const cliBaseUrl = process.argv.slice(2).find((arg) => arg !== '--')
 const baseUrl = cliBaseUrl ?? process.env.API_BASE_URL ?? 'http://127.0.0.1:4000'
 const namespace = process.env.SMOKE_NAMESPACE ?? 'default'
 const userId = process.env.SMOKE_USER_ID ?? 'smoke-user'
+const authToken = process.env.SMOKE_AUTH_TOKEN
 
 const key = `smoke-${Date.now()}`
 
@@ -9,6 +10,10 @@ const headers = {
   'content-type': 'application/json',
   'x-namespace': namespace,
   'x-user-id': userId,
+}
+
+if (authToken) {
+  headers.authorization = `Bearer ${authToken}`
 }
 
 const putResponse = await fetch(`${baseUrl}/v1/items/${encodeURIComponent(key)}`, {

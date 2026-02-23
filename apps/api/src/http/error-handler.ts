@@ -1,42 +1,35 @@
-import { SyncStorageError } from '@sync-storage/core'
-import { HTTPException } from 'hono/http-exception'
 import type { Context } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import {
+  SyncStorageError,
+  ValidationError,
+  UnauthorizedError,
+  PreconditionFailedError,
+} from '@sync-storage/core'
 
-export function handleApiError(error: unknown, c: Context): Response {
+export function handleApiError(error: Error, c: Context): Response {
   if (error instanceof SyncStorageError) {
+    const status =
+      error instanceof ValidationError || error instanceof PreconditionFailedError
+        ? 400
+        : error instanceof UnauthorizedError
+          ? 401
+          : 500
     return c.json(
       {
         code: error.code,
         message: error.message,
+        details: (error as any).details,
       },
-      toStatusCode(error.status)
+      status as any
     )
   }
 
-  if (error instanceof HTTPException) {
-    return c.json(
-      {
-        code: 'HTTP_ERROR',
-        message: error.message,
-      },
-      toStatusCode(error.status)
-    )
-  }
-
-  console.error('Unhandled API error', error)
+  console.error('Unhandled Error:', error)
   return c.json(
     {
-      code: 'INTERNAL_ERROR',
-      message: 'Unexpected internal server error',
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'An unexpected error occurred',
     },
     500
-  )
-}
-
-function toStatusCode(status: number): ContentfulStatusCode {
-  if (status >= 200 && status <= 599 && status !== 204 && status !== 205 && status !== 304) {
-    return status as ContentfulStatusCode
-  }
-  return 500
+  ) as any
 }

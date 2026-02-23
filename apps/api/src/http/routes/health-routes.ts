@@ -5,13 +5,9 @@ export function registerHealthRoutes(
   app: Hono<{ Variables: AppVariables }>,
   runtime: AppRuntime
 ): void {
-  app.get('/v1/healthz', (c) => {
-    return c.json({ ok: true })
-  })
-
+  app.get('/v1/healthz', (c) => c.json({ ok: true }))
   app.get('/v1/readyz', async (c) => {
     const health = await runtime.service.health()
-    const status = health.ok ? 200 : 503
-    return c.json(health, status)
+    return c.json(health, health.ok ? 200 : (503 as any))
   })
 }
